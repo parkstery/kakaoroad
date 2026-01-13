@@ -48,10 +48,15 @@ const MapContainer: React.FC<MapContainerProps> = ({
 
   useEffect(() => { speedRef.current = simulationSpeed; }, [simulationSpeed]);
 
+  // Initialize Map with Polling to wait for SDK
   useEffect(() => {
-    if (mapRef.current && !mapInstance.current) {
+    if (mapInstance.current) return; // Already initialized
+
+    const initMap = () => {
       if (typeof window !== 'undefined' && window.kakao && window.kakao.maps) {
         window.kakao.maps.load(() => {
+          if (!mapRef.current) return;
+          
           const options = { center: new window.kakao.maps.LatLng(37.5665, 126.9780), level: 3 };
           mapInstance.current = new window.kakao.maps.Map(mapRef.current, options);
           infoWindowRef.current = new window.kakao.maps.InfoWindow({ zIndex: 1 });
@@ -62,7 +67,27 @@ const MapContainer: React.FC<MapContainerProps> = ({
           });
           setMapLoaded(true);
         });
+        return true;
       }
+      return false;
+    };
+
+    // Try immediately
+    if (!initMap()) {
+      // If not loaded, poll every 100ms for up to 5 seconds
+      const interval = setInterval(() => {
+        if (initMap()) {
+          clearInterval(interval);
+        }
+      }, 100);
+      
+      // Clear interval after 5 seconds to prevent infinite polling
+      const timeout = setTimeout(() => clearInterval(interval), 5000);
+
+      return () => {
+        clearInterval(interval);
+        clearTimeout(timeout);
+      };
     }
   }, []);
 
