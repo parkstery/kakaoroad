@@ -1,0 +1,7 @@
+{
+  "name": "Kakao Map Route Explorer",
+  "description": "A sophisticated GIS application for finding addresses and navigating routes using Kakao Maps API, featuring address search, waypoint marking, and real-time car route calculation.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
