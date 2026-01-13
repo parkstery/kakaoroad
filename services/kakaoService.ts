@@ -81,7 +81,8 @@ export const getCarRoute = async (start: Location, end: Location): Promise<Route
  */
 export const getAddressFromCoords = (lat: number, lng: number): Promise<string> => {
   return new Promise((resolve) => {
-    if (!window.kakao || !window.kakao.maps || !window.kakao.maps.services) {
+    // Defensive check for Server-Side Rendering (SSR)
+    if (typeof window === 'undefined' || !window.kakao || !window.kakao.maps || !window.kakao.maps.services) {
         resolve(`위도: ${lat.toFixed(4)}, 경도: ${lng.toFixed(4)}`);
         return;
     }

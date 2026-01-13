@@ -1,3 +1,3 @@
 
-// This file is no longer needed for Next.js
-export {};
+// This file is deprecated and should be ignored by the build system.
+export default {};
