@@ -42,7 +42,7 @@ const MapContainer: React.FC<MapContainerProps> = ({
   const driveStateRef = useRef({ pathIndex: 0, progress: 0, totalDistanceCovered: 0, lastRoadviewUpdateDist: 0 });
 
   const [clickedPos, setClickedPos] = useState<{ lat: number; lng: number; address: string } | null>(null);
-  const [mapLoaded, setMapLoaded] = useState(false);
+  const [mapStatus, setMapStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [isRoadviewMode, setIsRoadviewMode] = useState(false);
   const [isRoadviewOpen, setIsRoadviewOpen] = useState(false);
 
@@ -57,15 +57,20 @@ const MapContainer: React.FC<MapContainerProps> = ({
         window.kakao.maps.load(() => {
           if (!mapRef.current) return;
           
-          const options = { center: new window.kakao.maps.LatLng(37.5665, 126.9780), level: 3 };
-          mapInstance.current = new window.kakao.maps.Map(mapRef.current, options);
-          infoWindowRef.current = new window.kakao.maps.InfoWindow({ zIndex: 1 });
-          roadviewClient.current = new window.kakao.maps.RoadviewClient();
-          roadviewMarker.current = new window.kakao.maps.Marker({
-            image: new window.kakao.maps.MarkerImage('https://t1.daumcdn.net/localimg/localimages/07/2018/pc/roadview_minimap_wk_2018.png', new window.kakao.maps.Size(26, 46), { spriteSize: new window.kakao.maps.Size(1666, 168), spriteOrigin: new window.kakao.maps.Point(705, 114), offset: new window.kakao.maps.Point(13, 46) }),
-            position: options.center
-          });
-          setMapLoaded(true);
+          try {
+            const options = { center: new window.kakao.maps.LatLng(37.5665, 126.9780), level: 3 };
+            mapInstance.current = new window.kakao.maps.Map(mapRef.current, options);
+            infoWindowRef.current = new window.kakao.maps.InfoWindow({ zIndex: 1 });
+            roadviewClient.current = new window.kakao.maps.RoadviewClient();
+            roadviewMarker.current = new window.kakao.maps.Marker({
+              image: new window.kakao.maps.MarkerImage('https://t1.daumcdn.net/localimg/localimages/07/2018/pc/roadview_minimap_wk_2018.png', new window.kakao.maps.Size(26, 46), { spriteSize: new window.kakao.maps.Size(1666, 168), spriteOrigin: new window.kakao.maps.Point(705, 114), offset: new window.kakao.maps.Point(13, 46) }),
+              position: options.center
+            });
+            setMapStatus('success');
+          } catch (e) {
+            console.error("Map Init Error:", e);
+            setMapStatus('error');
+          }
         });
         return true;
       }
@@ -81,8 +86,11 @@ const MapContainer: React.FC<MapContainerProps> = ({
         }
       }, 100);
       
-      // Clear interval after 5 seconds to prevent infinite polling
-      const timeout = setTimeout(() => clearInterval(interval), 5000);
+      // Clear interval after 3 seconds and show error if still not loaded
+      const timeout = setTimeout(() => {
+        clearInterval(interval);
+        if (!mapInstance.current) setMapStatus('error');
+      }, 3000);
 
       return () => {
         clearInterval(interval);
@@ -92,7 +100,7 @@ const MapContainer: React.FC<MapContainerProps> = ({
   }, []);
 
   useEffect(() => {
-    if (!mapInstance.current || !mapLoaded) return;
+    if (!mapInstance.current || mapStatus !== 'success') return;
     const clickHandler = async (mouseEvent: any) => {
       const latlng = mouseEvent.latLng;
       if (isDriving) return;
@@ -119,7 +127,7 @@ const MapContainer: React.FC<MapContainerProps> = ({
     };
     window.kakao.maps.event.addListener(mapInstance.current, 'click', clickHandler);
     return () => { if(mapInstance.current) window.kakao.maps.event.removeListener(mapInstance.current, 'click', clickHandler); };
-  }, [mapLoaded, isRoadviewMode, onSetPoint, isDriving]);
+  }, [mapStatus, isRoadviewMode, onSetPoint, isDriving]);
 
   useEffect(() => {
     if (mapInstance.current) mapInstance.current.relayout();
@@ -127,7 +135,7 @@ const MapContainer: React.FC<MapContainerProps> = ({
   }, [isRoadviewOpen]);
 
   useEffect(() => {
-    if (!mapLoaded || !routeData || !routeData.polyline || routeData.polyline.length < 2) return;
+    if (mapStatus !== 'success' || !routeData || !routeData.polyline || routeData.polyline.length < 2) return;
 
     if (isDriving) {
       setIsRoadviewOpen(true);
@@ -188,7 +196,7 @@ const MapContainer: React.FC<MapContainerProps> = ({
       if (animationReqRef.current) { cancelAnimationFrame(animationReqRef.current); animationReqRef.current = null; }
     }
     return () => { if (animationReqRef.current) cancelAnimationFrame(animationReqRef.current); };
-  }, [isDriving, routeData, mapLoaded, onStopDriving]);
+  }, [isDriving, routeData, mapStatus, onStopDriving]);
 
   const toggleRoadview = () => {
     if (!mapInstance.current) return;
@@ -251,18 +259,45 @@ const MapContainer: React.FC<MapContainerProps> = ({
   }, [clickedPos, onSetPoint]);
 
   return (
-    <div className="w-full h-full flex">
+    <div className="w-full h-full flex bg-gray-100 relative">
+      {mapStatus === 'loading' && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-gray-100/80 backdrop-blur-sm">
+          <div className="flex flex-col items-center">
+            <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-2"></div>
+            <p className="text-gray-600 text-sm font-semibold">지도를 불러오는 중...</p>
+          </div>
+        </div>
+      )}
+      
+      {mapStatus === 'error' && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-gray-100">
+          <div className="text-center p-6 max-w-sm">
+            <div className="text-red-500 mb-2">
+              <svg className="w-10 h-10 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+            </div>
+            <h3 className="text-lg font-bold text-gray-800 mb-1">지도를 불러올 수 없습니다</h3>
+            <p className="text-sm text-gray-600 mb-4">API 키가 올바르지 않거나 도메인이 등록되지 않았습니다.</p>
+            <p className="text-xs text-gray-500 bg-white p-2 rounded border">Kakao Developers &gt; 내 애플리케이션 &gt; 플랫폼 &gt; Web에<br/><strong className="text-blue-600">{typeof window !== 'undefined' ? window.location.origin : '현재 도메인'}</strong>을 등록해주세요.</p>
+          </div>
+        </div>
+      )}
+
       <div className={`h-full transition-all duration-300 relative ${isRoadviewOpen ? 'w-1/2' : 'w-full'}`}>
-        <div ref={mapRef} className="w-full h-full" />
-        <div className="absolute right-4 top-4 z-50 flex flex-col gap-2">
-           <button onClick={toggleRoadview} className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold border transition-all shadow-md ${isRoadviewMode ? 'bg-blue-500 text-white border-blue-600 ring-2 ring-blue-300' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`} title="로드뷰 켜기/끄기">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-          </button>
-        </div>
-        <div className="absolute right-4 bottom-10 z-20 flex flex-col gap-2 shadow-lg">
-          <button onClick={() => mapInstance.current?.setLevel(mapInstance.current.getLevel() - 1)} className="w-10 h-10 bg-white hover:bg-gray-100 rounded-lg flex items-center justify-center font-bold text-gray-600 border border-gray-200 transition-all">+</button>
-          <button onClick={() => mapInstance.current?.setLevel(mapInstance.current.getLevel() + 1)} className="w-10 h-10 bg-white hover:bg-gray-100 rounded-lg flex items-center justify-center font-bold text-gray-600 border border-gray-200 transition-all">-</button>
-        </div>
+        <div ref={mapRef} className="w-full h-full" style={{ width: '100%', height: '100%', minHeight: '300px' }} />
+        
+        {mapStatus === 'success' && (
+          <>
+            <div className="absolute right-4 top-4 z-50 flex flex-col gap-2">
+              <button onClick={toggleRoadview} className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold border transition-all shadow-md ${isRoadviewMode ? 'bg-blue-500 text-white border-blue-600 ring-2 ring-blue-300' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`} title="로드뷰 켜기/끄기">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+              </button>
+            </div>
+            <div className="absolute right-4 bottom-10 z-20 flex flex-col gap-2 shadow-lg">
+              <button onClick={() => mapInstance.current?.setLevel(mapInstance.current.getLevel() - 1)} className="w-10 h-10 bg-white hover:bg-gray-100 rounded-lg flex items-center justify-center font-bold text-gray-600 border border-gray-200 transition-all">+</button>
+              <button onClick={() => mapInstance.current?.setLevel(mapInstance.current.getLevel() + 1)} className="w-10 h-10 bg-white hover:bg-gray-100 rounded-lg flex items-center justify-center font-bold text-gray-600 border border-gray-200 transition-all">-</button>
+            </div>
+          </>
+        )}
       </div>
       <div className={`h-full transition-all duration-300 bg-gray-900 relative border-l border-gray-700 ${isRoadviewOpen ? 'w-1/2 block' : 'w-0 hidden'}`}>
         <div ref={roadviewRef} className="w-full h-full" />

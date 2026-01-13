@@ -6,6 +6,9 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Kakao Map Route Explorer",
   description: "Advanced route planning with Kakao Maps",
+  icons: {
+    icon: '/favicon.ico',
+  },
 };
 
 export default function RootLayout({
@@ -22,10 +25,10 @@ export default function RootLayout({
         <meta httpEquiv="Content-Security-Policy" content="upgrade-insecure-requests" />
       </head>
       <body>
-        {/* Load Kakao Maps SDK globally */}
+        {/* Load Kakao Maps SDK globally with afterInteractive strategy to ensure DOM is ready */}
         <Script 
           src={KAKAO_SDK_URL} 
-          strategy="beforeInteractive" 
+          strategy="afterInteractive"
         />
         {children}
       </body>
